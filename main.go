@@ -19,7 +19,7 @@ var (
 	topic      = flag.String("topic", "", "Topic where hub-ctrl messages will be received (mandatory)")
 	user       = flag.String("user", "", "MQTT username")
 	pwd        = flag.String("password", "", "MQTT password")
-	period     = flag.Int("period", 3, "Periodic time to recheck the external IP address")
+	period     = flag.Int("period", 3, "Periodic time in hours to recheck the external IP address")
 )
 
 //Connect to the MQTT broker
@@ -51,18 +51,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*clientMQTT, err := connectMQTT()
+	clientMQTT, err := connectMQTT()
 	if err != nil {
 		log.Fatalf("Error connecting to MQTT broker: %s", err)
 	}
 
-	log.Printf("Connected to MQTT broker at %s", *mqttBroker)*/
+	log.Printf("Connected to MQTT broker at %s", *mqttBroker)
 
 	for {
+
+		var msg string
 
 		resp, err := http.Get(externalIPService)
 		if err != nil {
 			log.Printf("Could not obtain the external IP address")
+			msg = "Could not obtain the external IP address"
 		}
 		defer resp.Body.Close()
 
@@ -71,11 +74,15 @@ func main() {
 			if err != nil {
 				log.Printf("Error retrieving HTTP body: %s", err)
 			}
-			ip := string(bodyBytes)
-			log.Printf("External IP address is: %s", ip)
+			msg = string(bodyBytes)
+			log.Printf("External IP address is: %s", msg)
 		}
 
-		time.Sleep(10 * time.Second)
+		if token := clientMQTT.Publish(*topic, 0, false, msg); token.Wait() && token.Error() != nil {
+			log.Printf("Error publishing message to MQTT broker: %s", token.Error())
+		}
+
+		time.Sleep(time.Duration(*period) * time.Hour)
 
 	}
 
